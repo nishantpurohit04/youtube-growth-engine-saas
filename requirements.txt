@@ -1,0 +1,13 @@
+streamlit
+google-api-python-client
+pandas
+duckdb
+plotly
+streamlit-echarts
+google-generativeai
+python-dotenv
+pyrebase4
+firebase-admin
+stripe
+fastapi
+uvicorn

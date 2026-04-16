@@ -1,0 +1,49 @@
+/* Custom Premium UI for YouTube Growth Engine */
+
+.stApp {
+    background-color: #0E0E0E;
+    color: #FFFFFF;
+}
+
+/* Glassmorphism for containers */
+div[data-testid="stVerticalBlock"] > div:has(div.stMetric) {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    margin-bottom: 20px;
+}
+
+/* KPI Card Styling */
+.stMetric {
+    text-align: center;
+}
+
+/* Custom Button Color */
+div.stButton > button {
+    background-color: #FF0000;
+    color: white;
+    border-radius: 8px;
+    border: none;
+    transition: all 0.3s ease;
+}
+
+div.stButton > button:hover {
+    background-color: #CC0000;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 0, 0, 0.3);
+}
+
+/* Table Styling */
+.stTable {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    color: white !important;
+}
+
+/* Sidebar Styling */
+[data-testid="stSidebar"] {
+    background-color: #1A1A1A;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}

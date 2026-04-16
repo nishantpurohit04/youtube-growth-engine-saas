@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv
+venv/
+ENV/
+env/
+
+# Environment secrets
+.env
+*.json
+!PROJECT_BLUEPRINT.md
+
+# Streamlit
+.streamlit/
+
+# OS
+.DS_Store
+Thumbs.db
