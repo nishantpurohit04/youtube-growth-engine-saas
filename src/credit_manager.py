@@ -3,7 +3,7 @@ from firebase_admin import credentials, firestore
 import os
 import logging
 import json
-import base64
+import tempfile
 from src.config import get_secret
 
 logger = logging.getLogger("CreditManager")
@@ -16,7 +16,7 @@ class CreditManager:
         self.db = CreditManager._db
 
     def _initialize_firebase(self):
-        """Robustly initializes Firebase Admin SDK with Diagnostic Probes."""
+        """The Ultimate Robust Initializer: Uses Temporary Files to bypass dict-loading bugs."""
         try:
             if not firebase_admin._apps:
                 secret = get_secret("FIREBASE_SERVICE_ACCOUNT_KEY")
@@ -24,15 +24,7 @@ class CreditManager:
                     logger.error("CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY missing.")
                     return
 
-                # --- DIAGNOSTIC PROBE ---
-                s_str = str(secret)
-                logger.info(f"DIAGNOSTIC: Secret Length: {len(s_str)}")
-                logger.info(f"DIAGNOSTIC: Starts with: {s_str[:10]!r}")
-                logger.info(f"DIAGNOSTIC: Ends with: {s_str[-10:]!r}")
-                logger.info(f"DIAGNOSTIC: Literal \\n count: {s_str.count('\\n')}")
-                logger.info(f"DIAGNOSTIC: Actual newline count: {s_str.count(chr(10))}")
-                # -------------------------
-
+                # 1. Handle the secret to get a valid dictionary
                 if isinstance(secret, dict):
                     cred_dict = secret
                 elif isinstance(secret, str) and secret.strip().startswith('{'):
@@ -42,7 +34,7 @@ class CreditManager:
                         logger.error(f"CRITICAL: Invalid JSON: {e}")
                         return
                 else:
-                    # Assume path
+                    # It's already a path
                     try:
                         cred = credentials.Certificate(secret)
                         firebase_admin.initialize_app(cred)
@@ -52,15 +44,31 @@ class CreditManager:
                         logger.error(f"File load failed: {e}")
                         return
 
+                # 2. Sanitize the private key
                 if 'private_key' in cred_dict:
                     pk = cred_dict['private_key']
                     pk = pk.replace('\\n', '\n').strip('"').strip("'")
                     cred_dict['private_key'] = pk
-                
-                cred = credentials.Certificate(cred_dict)
-                firebase_admin.initialize_app(cred)
+
+                # 3. THE BYPASS: Write to a temporary file
+                # This is the most stable way to initialize firebase-admin in the cloud
+                try:
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tf:
+                        json.dump(cred_dict, tf)
+                        temp_path = tf.name
+                    
+                    cred = credentials.Certificate(temp_path)
+                    firebase_admin.initialize_app(cred)
+                    # Clean up the temp file immediately after initialization
+                    os.remove(temp_path)
+                except Exception as e:
+                    logger.error(f"Temporary file bypass failed: {e}")
+                    # Fallback to direct dict if file fails
+                    cred = credentials.Certificate(cred_dict)
+                    firebase_admin.initialize_app(cred)
             
             CreditManager._db = firestore.client()
+            logger.info("Firestore initialized successfully via TempFile bypass.")
         except Exception as e:
             logger.error(f"Firebase Admin critical failure: {str(e)}")
 
