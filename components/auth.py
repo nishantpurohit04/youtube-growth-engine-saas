@@ -2,18 +2,18 @@ import os
 import pyrebase
 import streamlit as st
 
-from src.config import get_env_clean
+from src.config import get_secret
 
 def get_firebase_auth():
     """Initializes Firebase and returns the auth object dynamically."""
     firebase_config = {
-        "apiKey": get_env_clean("FIREBASE_API_KEY"),
-        "authDomain": get_env_clean("FIREBASE_AUTH_DOMAIN"),
-        "projectId": get_env_clean("FIREBASE_PROJECT_ID"),
-        "storageBucket": get_env_clean("FIREBASE_STORAGE_BUCKET"),
-        "messagingSenderId": get_env_clean("FIREBASE_MESSAGING_SENDER_ID"),
-        "appId": get_env_clean("FIREBASE_APP_ID"),
-        "databaseURL": get_env_clean("FIREBASE_DATABASE_URL"),
+        "apiKey": get_secret("FIREBASE_API_KEY"),
+        "authDomain": get_secret("FIREBASE_AUTH_DOMAIN"),
+        "projectId": get_secret("FIREBASE_PROJECT_ID"),
+        "storageBucket": get_secret("FIREBASE_STORAGE_BUCKET"),
+        "messagingSenderId": get_secret("FIREBASE_MESSAGING_SENDER_ID"),
+        "appId": get_secret("FIREBASE_APP_ID"),
+        "databaseURL": get_secret("FIREBASE_DATABASE_URL"),
     }
     firebase = pyrebase.initialize_app(firebase_config)
     return firebase.auth()
