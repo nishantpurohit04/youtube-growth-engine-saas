@@ -6,7 +6,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from tenacity import retry, stop_after_attempt, wait_exponential
 from datetime import datetime, timedelta, timezone
-
+from src.firebase_init import initialize_firebase_admin
 
 # Load environment variables
 load_dotenv()
@@ -21,38 +21,7 @@ class YouTubeClient:
             raise ValueError("YOUTUBE_API_KEY not found in environment variables.")
         
         self.youtube = build("youtube", "v3", developerKey=self.api_key)
-        self.db = None
-        self._initialize_firebase()
-
-    def _initialize_firebase(self):
-        try:
-            if not firebase_admin._apps:
-                from src.config import get_secret
-                secret = get_secret("FIREBASE_SERVICE_ACCOUNT_KEY")
-                if not secret:
-                    logger.warning("FIREBASE_SERVICE_ACCOUNT_KEY not found. Caching will be unavailable.")
-                    return
-                
-                import json
-                if secret.strip().startswith('{'):
-                    try:
-                        cred_dict = json.loads(secret)
-                        if 'private_key' in cred_dict:
-                            cred_dict['private_key'] = cred_dict['private_key'].replace('\\n', '\n')
-                        cred = credentials.Certificate(cred_dict)
-                    except json.JSONDecodeError:
-                        logger.error("FIREBASE_SERVICE_ACCOUNT_KEY is not valid JSON.")
-                        return
-                else:
-                    cred_path = secret if os.path.exists(secret) else os.path.join(os.getcwd(), secret)
-                    cred = credentials.Certificate(cred_path)
-                
-                firebase_admin.initialize_app(cred)
-            
-            self.db = firestore.client()
-            logger.info("Firestore initialized for YouTubeClient caching.")
-        except Exception as e:
-            logger.error(f"Firebase Admin initialization failed for YouTubeClient: {str(e)}")
+        self.db = initialize_firebase_admin()
 
     def _get_cached_data(self, key):
         """Retrieves data from Firestore if it exists and is less than 24 hours old."""
@@ -166,8 +135,6 @@ class YouTubeClient:
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def get_video_comments(self, video_id, max_comments=100):
         """Returns text of comments."""
-        # Comments are highly dynamic, we skip caching here to maintain freshness, 
-        # but we keep the retry logic for reliability.
         comments = []
         next_page_token = None
         
