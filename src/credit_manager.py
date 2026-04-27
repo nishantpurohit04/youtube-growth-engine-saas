@@ -25,70 +25,40 @@ class CreditManager:
         return None
 
     def _initialize_firebase(self):
-        """The ultimate fail-safe Firebase initializer."""
+        """The most aggressive initializer. Fails loud and hard."""
         try:
             if not firebase_admin._apps:
                 secret = get_secret("FIREBASE_SERVICE_ACCOUNT_KEY")
                 if not secret:
-                    logger.error("CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY missing.")
-                    return
+                    raise RuntimeError("FIREBASE_SERVICE_ACCOUNT_KEY is missing from secrets!")
 
-                # STRATEGY 1: Direct Dict / JSON Load
-                try:
-                    if isinstance(secret, dict):
-                        cred_dict = secret
-                    elif isinstance(secret, str) and secret.strip().startswith('{'):
-                        cred_dict = json.loads(secret)
+                # Use the hybrid loading logic
+                if isinstance(secret, dict):
+                    cred_dict = secret
+                elif isinstance(secret, str) and secret.strip().startswith('{'):
+                    cred_dict = json.loads(secret)
+                else:
+                    # Try to find JSON in a string
+                    match = re.search(r"\{.*\}", str(secret), re.DOTALL)
+                    if match:
+                        cred_dict = json.loads(match.group(0))
                     else:
-                        raise ValueError("Not a dict or JSON string")
-                    
-                    if 'private_key' in cred_dict:
-                        pk = cred_dict['private_key'].replace('\\n', '\n')
-                        cred_dict['private_key'] = pk
-                    cred = credentials.Certificate(cred_dict)
-                    firebase_admin.initialize_app(cred)
-                    CreditManager._db = firestore.client()
-                    return
-                except Exception as e1:
-                    logger.warning(f"Strategy 1 (JSON) failed: {e1}")
+                        # Last ditch: assume it's a path
+                        cred = credentials.Certificate(secret)
+                        firebase_admin.initialize_app(cred)
+                        CreditManager._db = firestore.client()
+                        return
 
-                # STRATEGY 2: PEM Extraction (Regex)
-                try:
-                    pem_key = self._extract_pem(str(secret))
-                    if pem_key:
-                        # We need a full dict for Certificate, so we create a dummy one 
-                        # if we only have the key. This is risky but sometimes works.
-                        # Better yet, if we have the secret string, we try to find the other fields.
-                        if isinstance(secret, str) and '{' in secret:
-                            # Try to rebuild the dict from the string but with the repaired key
-                            d = json.loads(secret)
-                            d['private_key'] = pem_key
-                            cred = credentials.Certificate(d)
-                            firebase_admin.initialize_app(cred)
-                            CreditManager._db = firestore.client()
-                            return
-                except Exception as e2:
-                    logger.warning(f"Strategy 2 (PEM) failed: {e2}")
-
-                # STRATEGY 3: Base64 Fallback (common for cloud secrets)
-                try:
-                    # If the secret looks like base64, decode it
-                    if isinstance(secret, str) and len(secret) > 100 and '=' in secret:
-                        decoded = base64.b64decode(secret).decode('utf-8')
-                        if '{' in decoded:
-                            d = json.loads(decoded)
-                            if 'private_key' in d:
-                                d['private_key'] = d['private_key'].replace('\\n', '\n')
-                            cred = credentials.Certificate(d)
-                            firebase_admin.initialize_app(cred)
-                            CreditManager._db = firestore.client()
-                            return
-                except Exception as e3:
-                    logger.warning(f"Strategy 3 (Base64) failed: {e3}")
-
-                logger.error("All Firebase initialization strategies failed.")
+                if 'private_key' in cred_dict:
+                    cred_dict['private_key'] = cred_dict['private_key'].replace('\\n', '\n')
+                
+                cred = credentials.Certificate(cred_dict)
+                firebase_admin.initialize_app(cred)
+            
+            CreditManager._db = firestore.client()
         except Exception as e:
-            logger.error(f"Firebase Admin critical failure: {str(e)}")
+            # CRITICAL: Throw the error so it appears on the Streamlit screen
+            raise RuntimeError(f"DATABASE CRITICAL FAILURE: {str(e)}") from e
 
     def get_user_credits(self, user_id):
         if not self.db:
