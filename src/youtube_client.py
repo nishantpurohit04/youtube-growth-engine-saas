@@ -26,13 +26,13 @@ class YouTubeClient:
     def _initialize_firebase(self):
         try:
             if not firebase_admin._apps:
-                secret = os.getenv("FIREBASE_SERVICE_ACCOUNT_KEY")
+                from src.config import get_secret
+                secret = get_secret("FIREBASE_SERVICE_ACCOUNT_KEY")
                 if not secret:
                     logger.warning("FIREBASE_SERVICE_ACCOUNT_KEY not found. Caching will be unavailable.")
                     return
                 
                 import json
-                # Handle both JSON string (Cloud) and File Path (Local)
                 if secret.strip().startswith('{'):
                     try:
                         cred_dict = json.loads(secret)
