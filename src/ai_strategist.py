@@ -43,7 +43,22 @@ class AIStrategist:
 
         try:
             response = self.model.generate_content(prompt)
-            return response.text
+            text = response.text
+            
+            # --- FAIL-SAFE PROFESSIONAL FILTER ---
+            # Look for the start of the actual report regardless of whether the AI used ### or not.
+            marker = "📊 Executive Analysis"
+            if marker in text:
+                # Slice from the marker onwards
+                text = text[text.find(marker):]
+            
+            # Final sanity check: remove any leading "AI Strategy Consultant" artifacts
+            if text.startswith("🤖 AI Strategy Consultant"):
+                # Find the first actual header if it exists
+                if "📊 Executive Analysis" in text:
+                    text = text[text.find("📊 Executive Analysis"):]
+            
+            return text
         except Exception as e:
             # We raise the exception so tenacity can catch it and retry
             raise e

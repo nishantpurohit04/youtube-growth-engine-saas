@@ -1,6 +1,9 @@
 import streamlit as st
+from src.config import load_env_config
+load_env_config()
+import os
 from dotenv import load_dotenv
-load_dotenv()
+
 import pandas as pd
 from src.youtube_client import YouTubeClient
 from src.data_processor import DataProcessor

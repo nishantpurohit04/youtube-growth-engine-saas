@@ -2,24 +2,26 @@ import os
 import pyrebase
 import streamlit as st
 
-# Firebase configuration
-firebase_config = {
-    "apiKey": os.getenv("FIREBASE_API_KEY"),
-    "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
-    "projectId": os.getenv("FIREBASE_PROJECT_ID"),
-    "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET"),
-    "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID"),
-    "appId": os.getenv("FIREBASE_APP_ID"),
-    "databaseURL": os.getenv("FIREBASE_DATABASE_URL"),
-}
+from src.config import get_env_clean
 
-# Initialize Firebase
-firebase = pyrebase.initialize_app(firebase_config)
-auth = firebase.auth()
+def get_firebase_auth():
+    """Initializes Firebase and returns the auth object dynamically."""
+    firebase_config = {
+        "apiKey": get_env_clean("FIREBASE_API_KEY"),
+        "authDomain": get_env_clean("FIREBASE_AUTH_DOMAIN"),
+        "projectId": get_env_clean("FIREBASE_PROJECT_ID"),
+        "storageBucket": get_env_clean("FIREBASE_STORAGE_BUCKET"),
+        "messagingSenderId": get_env_clean("FIREBASE_MESSAGING_SENDER_ID"),
+        "appId": get_env_clean("FIREBASE_APP_ID"),
+        "databaseURL": get_env_clean("FIREBASE_DATABASE_URL"),
+    }
+    firebase = pyrebase.initialize_app(firebase_config)
+    return firebase.auth()
 
 def sign_up(email, password):
     """Creates a new user in Firebase Auth."""
     try:
+        auth = get_firebase_auth()
         user = auth.create_user_with_email_and_password(email, password)
         return {"success": True, "user": user}
     except Exception as e:
@@ -28,12 +30,13 @@ def sign_up(email, password):
 def sign_in(email, password):
     """Authenticates a user with Firebase Auth."""
     try:
+        auth = get_firebase_auth()
         user = auth.sign_in_with_email_and_password(email, password)
         return {"success": True, "user": user}
     except Exception as e:
         err_msg = str(e).lower()
-        with open("firebase_debug.log", "a") as f:
-            f.write(f"Raw Error: {err_msg}\n")
+        with open("auth_debug.log", "a") as f:
+            f.write(f"Login Error: {err_msg}\n")
         if "invalid-password" in err_msg or "email-not-found" in err_msg or "invalid_login_credentials" in err_msg:
             friendly_error = "❌ Invalid email or password. Please try again."
         elif "user-disabled" in err_msg:
