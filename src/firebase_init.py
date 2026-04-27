@@ -43,14 +43,17 @@ def initialize_firebase_admin():
             if 'private_key' in cred_dict:
                 pk = cred_dict['private_key']
                 if isinstance(pk, str):
-                    # Remove accidental surrounding quotes
-                    pk = pk.strip().strip('"').strip("'")
+                    # Remove accidental surrounding quotes only, preserve structural newlines
+                    if pk.startswith('"') and pk.endswith('"'):
+                        pk = pk[1:-1]
+                    elif pk.startswith("'") and pk.endswith("'"):
+                        pk = pk[1:-1]
+                    
                     # Fix Windows-style carriage returns
                     pk = pk.replace('\\r\\n', '\n').replace('\\r', '')
-                    # Fix escaped newlines (the most common Streamlit issue)
+                    # Fix escaped newlines (the common Streamlit issue)
                     pk = pk.replace('\\n', '\n')
-                    # Final trim
-                    pk = pk.strip()
+                    # REMOVED: pk.strip() - This was killing the required trailing newline
                     cred_dict['private_key'] = pk
             
             # 3. TEMPORARY FILE BYPASS (The most stable method)
