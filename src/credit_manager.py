@@ -25,28 +25,31 @@ class CreditManager:
         return None
 
     def _initialize_firebase(self):
-        """The most aggressive initializer. Fails loud and hard."""
+        """Robustly initializes Firebase Admin SDK using Cloud-Aware secrets."""
         try:
             if not firebase_admin._apps:
                 secret = get_secret("FIREBASE_SERVICE_ACCOUNT_KEY")
                 if not secret:
-                    raise RuntimeError("FIREBASE_SERVICE_ACCOUNT_KEY is missing from secrets!")
+                    logger.error("CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY is missing.")
+                    return
 
-                # Use the hybrid loading logic
                 if isinstance(secret, dict):
                     cred_dict = secret
                 elif isinstance(secret, str) and secret.strip().startswith('{'):
-                    cred_dict = json.loads(secret)
+                    try:
+                        cred_dict = json.loads(secret)
+                    except json.JSONDecodeError as e:
+                        logger.error(f"CRITICAL: Secret is not valid JSON: {e}")
+                        return
                 else:
-                    # Try to find JSON in a string
-                    match = re.search(r"\{.*\}", str(secret), re.DOTALL)
-                    if match:
-                        cred_dict = json.loads(match.group(0))
-                    else:
-                        # Last ditch: assume it's a path
-                        cred = credentials.Certificate(secret)
+                    cred_path = secret if os.path.exists(secret) else os.path.join(os.getcwd(), secret)
+                    try:
+                        cred = credentials.Certificate(cred_path)
                         firebase_admin.initialize_app(cred)
                         CreditManager._db = firestore.client()
+                        return
+                    except Exception as e:
+                        logger.error(f"File-based cred load failed: {e}")
                         return
 
                 if 'private_key' in cred_dict:
@@ -57,8 +60,7 @@ class CreditManager:
             
             CreditManager._db = firestore.client()
         except Exception as e:
-            # CRITICAL: Throw the error so it appears on the Streamlit screen
-            raise RuntimeError(f"DATABASE CRITICAL FAILURE: {str(e)}") from e
+            logger.error(f"Firebase Admin initialization failed: {str(e)}")
 
     def get_user_credits(self, user_id):
         if not self.db:
