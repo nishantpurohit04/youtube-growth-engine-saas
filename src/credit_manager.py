@@ -105,7 +105,7 @@ class CreditManager:
             return 5
         except Exception as e:
             logger.error(f"Error retrieving credits for {user_id}: {e}")
-            return None
+            return f"ERROR: {str(e)}"
 
     def initialize_user_credits(self, user_id, initial_amount=5):
         if not self.db: return None
