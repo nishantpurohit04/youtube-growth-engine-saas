@@ -32,15 +32,18 @@ class YouTubeClient:
                     return
                 
                 import json
-                cred_path = secret if os.path.exists(secret) else os.path.join(os.getcwd(), secret)
+                # Handle both JSON string (Cloud) and File Path (Local)
                 if secret.strip().startswith('{'):
-                    import json
-                    cred_dict = json.loads(secret)
-                    # Sanitize private key to ensure newlines are handled correctly
-                    if 'private_key' in cred_dict:
-                        cred_dict['private_key'] = cred_dict['private_key'].replace('\\n', '\n')
-                    cred = credentials.Certificate(cred_dict)
+                    try:
+                        cred_dict = json.loads(secret)
+                        if 'private_key' in cred_dict:
+                            cred_dict['private_key'] = cred_dict['private_key'].replace('\\n', '\n')
+                        cred = credentials.Certificate(cred_dict)
+                    except json.JSONDecodeError:
+                        logger.error("FIREBASE_SERVICE_ACCOUNT_KEY is not valid JSON.")
+                        return
                 else:
+                    cred_path = secret if os.path.exists(secret) else os.path.join(os.getcwd(), secret)
                     cred = credentials.Certificate(cred_path)
                 
                 firebase_admin.initialize_app(cred)
