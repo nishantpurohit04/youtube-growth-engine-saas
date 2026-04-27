@@ -11,9 +11,9 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 # Credit Packages Configuration
 # format: package_id: (amount_in_inr, credit_count)
 CREDIT_PACKAGES = {
-    "starter": (499, 50),
-    "growth": (1499, 200),
-    "pro": (2999, 500)
+    "starter": (5, 50),
+    "growth": (15, 200),
+    "pro": (30, 500)
 }
 
 class PaymentManager:
@@ -34,18 +34,21 @@ class PaymentManager:
                 payment_method_types=['card'],
                 line_items=[{
                     'price_data': {
-                        'currency': 'inr',
+                        'currency': 'usd',
                         'product_data': {
                             'name': f"{package_id.capitalize()} Pack - {credits} Credits",
                             'description': "Add credits to your YouTube Growth Engine account.",
                         },
-                        'unit_amount': price * 100, # Stripe expects amount in paise
+                        'unit_amount': price * 100, # Stripe expects amount in cents
                     },
                     'quantity': 1,
                 }],
                 mode='payment',
                 # Pass the user_id in metadata so the webhook knows who to credit
                 client_reference_id=user_id,
+                metadata={
+                    'package_id': package_id
+                },
                 success_url="https://your-app-url.streamlit.app/?success=true",
                 cancel_url="https://your-app-url.streamlit.app/?canceled=true",
             )

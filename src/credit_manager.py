@@ -40,7 +40,7 @@ class CreditManager:
             logger.error(f"Firebase Admin initialization failed: {str(e)}")
 
     def get_user_credits(self, user_id):
-        """Returns the current credit balance for a user."""
+        """Returns the current credit balance for a user; initializes new users with 5 credits."""
         if not self.db:
             return None
         
@@ -49,9 +49,13 @@ class CreditManager:
             doc = user_ref.get()
             if doc.exists:
                 return doc.to_dict().get("credit_balance", 0)
-            else:
-                # User doesn't exist in Firestore, initialize them with free credits
-                return self.initialize_user_credits(user_id)
+            
+            # Auto-initialize new user with onboarding bonus
+            user_ref.set({"credit_balance": 5})
+            return 5
+        except Exception as e:
+            logger.error(f"Error retrieving credits for {user_id}: {e}")
+            return None
         except Exception as e:
             logger.error(f"Error fetching credits for {user_id}: {str(e)}")
             return None
@@ -87,19 +91,20 @@ class CreditManager:
                 snapshot = ref.get(transaction=transaction)
                 balance = snapshot.get("credit_balance") if snapshot.exists else 0
                 if balance >= 1:
-                    transaction.update(ref, {"credit_balance": balance - 1})
-                    return True
-                return False
+                    new_balance = balance - 1
+                    transaction.update(ref, {"credit_balance": new_balance})
+                    return True, new_balance
+                return False, balance
 
             transaction = self.db.transaction()
-            success = update_in_transaction(transaction, user_ref)
+            success, current_balance = update_in_transaction(transaction, user_ref)
             
             if success:
-                logger.info(f"Deducted 1 credit from user {user_id}.")
+                logger.info(f"Deducted 1 credit from user {user_id}. New balance: {current_balance}")
             else:
-                logger.warning(f"Insufficient credits for user {user_id}.")
+                logger.warning(f"Insufficient credits for user {user_id}. Balance: {current_balance}")
             
-            return success
+            return success, current_balance
         except Exception as e:
             logger.error(f"Error deducting credit for {user_id}: {str(e)}")
             return False

@@ -25,7 +25,7 @@ class SentimentEngine:
             logger.info(f"Performing {depth} sentiment analysis for {len(text_list)} comments.")
             # Delegate to the AI strategist's contextual analysis
             # This handles both 'Light' and 'Deep' requests via the unified Gemini API
-            results = strategy_client.analyze_comments_contextually(text_list)
+            results = strategy_client.analyze_comments_contextually(text_list, depth=depth)
             return results
         except Exception as e:
             logger.error(f"Sentiment Analysis Error: {str(e)}")

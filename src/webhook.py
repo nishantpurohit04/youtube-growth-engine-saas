@@ -16,9 +16,9 @@ endpoint_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
 
 @app.post("/webhook")
 async def stripe_webhook(request: Request, stripe_signature: str = Header(None)):
-    \"\"\"
+    """
     Handles Stripe Webhook events.
-    \"\"\"
+    """
     if not stripe_signature:
         raise HTTPException(status_code=400, detail="Missing stripe-signature header")
 
@@ -43,21 +43,9 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
         # Extract user_id from client_reference_id
         user_id = session.get('client_reference_id')
         
-        # We can also put the package_id in metadata during session creation
-        # For now, let's assume we determine package based on the amount paid
-        # or pass it via metadata in create_checkout_session.
-        
-        # Let's refine create_checkout_session to add metadata.
-        # For this implementation, we'll just check the amount.
-        amount = session.get('amount_total', 0) / 100
-        
-        # Simple mapping back to package_id based on price
-        package_id = None
-        from src.payment_manager import CREDIT_PACKAGES
-        for pid, (price, _) in CREDIT_PACKAGES.items():
-            if price == amount:
-                package_id = pid
-                break
+        # Extract package_id from metadata
+        metadata = session.get('metadata', {})
+        package_id = metadata.get('package_id')
         
         if user_id and package_id:
             payment_manager.fulfill_payment(user_id, package_id)
@@ -67,6 +55,6 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
 
     return {"status": "success"}
 
-if __name__ == \"__main__\":
+if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host=\"0.0.0.0\", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

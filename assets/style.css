@@ -5,8 +5,11 @@
     color: #FFFFFF;
 }
 
-/* Glassmorphism for containers */
-div[data-testid="stVerticalBlock"] > div:has(div.stMetric) {
+/* KPI Card Styling */
+.kpi-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     background: rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(10px);
     border-radius: 15px;
@@ -14,12 +17,33 @@ div[data-testid="stVerticalBlock"] > div:has(div.stMetric) {
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
     margin-bottom: 20px;
+    min-height: 100px;
 }
 
-/* KPI Card Styling */
-.stMetric {
-    text-align: center;
+.kpi-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
+
+.kpi-label {
+    font-weight: bold;
+    color: #AAAAAA;
+    font-size: 14px;
+    margin-bottom: 5px;
+}
+
+.kpi-value {
+    font-size: 28px;
+    font-weight: 800;
+    color: #FFFFFF;
+}
+
+.kpi-icon {
+    font-size: 32px;
+    margin-left: 20px;
+}
+
 
 /* Custom Button Color */
 div.stButton > button {
@@ -42,8 +66,27 @@ div.stButton > button:hover {
     color: white !important;
 }
 
-/* Sidebar Styling */
-[data-testid="stSidebar"] {
+/* Strategy Panel Styling */
+.strategy-container {
     background-color: #1A1A1A;
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 2rem;
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    line-height: 1.7;
+    color: #E0E0E0;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
 }
+
+.strategy-container strong {
+    color: #FF4B4B; /* Soft red for emphasis */
+    font-weight: 600;
+}
+
+.strategy-container ul, .strategy-container ol {
+    margin-bottom: 1rem;
+}
+
+.strategy-container li {
+    margin-bottom: 0.5rem;
+}
+

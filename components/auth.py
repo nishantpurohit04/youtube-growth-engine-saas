@@ -1,3 +1,4 @@
+import os
 import pyrebase
 import streamlit as st
 
@@ -9,6 +10,7 @@ firebase_config = {
     "storageBucket": "growth-engine-e9418.firebasestorage.app",
     "messagingSenderId": "741659135978",
     "appId": "1:741659135978:web:6a8afb9dad95c4c9c16c93",
+    "databaseURL": "https://growth-engine-e9418.firebaseio.com",
 }
 
 # Initialize Firebase
@@ -29,7 +31,16 @@ def sign_in(email, password):
         user = auth.sign_in_with_email_and_password(email, password)
         return {"success": True, "user": user}
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        err_msg = str(e).lower()
+        with open("firebase_debug.log", "a") as f:
+            f.write(f"Raw Error: {err_msg}\n")
+        if "invalid-password" in err_msg or "email-not-found" in err_msg or "invalid_login_credentials" in err_msg:
+            friendly_error = "❌ Invalid email or password. Please try again."
+        elif "user-disabled" in err_msg:
+            friendly_error = "🚫 This account has been disabled."
+        else:
+            friendly_error = "⚠️ An unexpected error occurred. Please try again later."
+        return {"success": False, "error": friendly_error}
 
 def sign_out():
     """Clears the user session from Streamlit state."""
