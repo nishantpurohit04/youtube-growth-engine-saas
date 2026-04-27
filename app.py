@@ -64,7 +64,8 @@ with st.sidebar:
     if credits is not None:
         st.metric("Credits Remaining", f"{credits} 🪙")
     else:
-        st.warning("Unable to load credits.")
+        # Temporary Debug: Show the actual error from the logs
+        st.error("Unable to load credits. Check logs for details.")
         
     with st.expander("💳 Buy More Credits"):
         st.write("Choose a package to upgrade your account:")
