@@ -4,13 +4,13 @@ import streamlit as st
 
 # Firebase configuration
 firebase_config = {
-    "apiKey": "AIzaSyBFrhkyt9gg1E393DbaKIO9gO9jW04kiWQ",
-    "authDomain": "growth-engine-e9418.firebaseapp.com",
-    "projectId": "growth-engine-e9418",
-    "storageBucket": "growth-engine-e9418.firebasestorage.app",
-    "messagingSenderId": "741659135978",
-    "appId": "1:741659135978:web:6a8afb9dad95c4c9c16c93",
-    "databaseURL": "https://growth-engine-e9418.firebaseio.com",
+    "apiKey": os.getenv("FIREBASE_API_KEY"),
+    "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
+    "projectId": os.getenv("FIREBASE_PROJECT_ID"),
+    "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET"),
+    "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID"),
+    "appId": os.getenv("FIREBASE_APP_ID"),
+    "databaseURL": os.getenv("FIREBASE_DATABASE_URL"),
 }
 
 # Initialize Firebase
