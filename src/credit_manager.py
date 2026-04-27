@@ -16,7 +16,7 @@ class CreditManager:
         self.db = CreditManager._db
 
     def _initialize_firebase(self):
-        """The Base64-Shielded Firebase Initializer."""
+        """Robustly initializes Firebase Admin SDK with Diagnostic Probes."""
         try:
             if not firebase_admin._apps:
                 secret = get_secret("FIREBASE_SERVICE_ACCOUNT_KEY")
@@ -24,16 +24,15 @@ class CreditManager:
                     logger.error("CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY missing.")
                     return
 
-                # 1. DETECT BASE64: If it's a long string without spaces or braces, try Base64
-                if isinstance(secret, str) and len(secret) > 100 and '{' not in secret:
-                    try:
-                        decoded_json = base64.b64decode(secret).decode('utf-8')
-                        secret = decoded_json
-                        logger.info("Successfully decoded Base64 secret.")
-                    except Exception as e:
-                        logger.warning(f"Base64 decode failed, falling back to raw: {e}")
+                # --- DIAGNOSTIC PROBE ---
+                s_str = str(secret)
+                logger.info(f"DIAGNOSTIC: Secret Length: {len(s_str)}")
+                logger.info(f"DIAGNOSTIC: Starts with: {s_str[:10]!r}")
+                logger.info(f"DIAGNOSTIC: Ends with: {s_str[-10:]!r}")
+                logger.info(f"DIAGNOSTIC: Literal \\n count: {s_str.count('\\n')}")
+                logger.info(f"DIAGNOSTIC: Actual newline count: {s_str.count(chr(10))}")
+                # -------------------------
 
-                # 2. LOAD JSON
                 if isinstance(secret, dict):
                     cred_dict = secret
                 elif isinstance(secret, str) and secret.strip().startswith('{'):
@@ -43,7 +42,7 @@ class CreditManager:
                         logger.error(f"CRITICAL: Invalid JSON: {e}")
                         return
                 else:
-                    # Assume it's a file path
+                    # Assume path
                     try:
                         cred = credentials.Certificate(secret)
                         firebase_admin.initialize_app(cred)
@@ -53,10 +52,8 @@ class CreditManager:
                         logger.error(f"File load failed: {e}")
                         return
 
-                # 3. SANITIZE PRIVATE KEY
                 if 'private_key' in cred_dict:
                     pk = cred_dict['private_key']
-                    # Fix literal \n and strip quotes
                     pk = pk.replace('\\n', '\n').strip('"').strip("'")
                     cred_dict['private_key'] = pk
                 
@@ -64,7 +61,6 @@ class CreditManager:
                 firebase_admin.initialize_app(cred)
             
             CreditManager._db = firestore.client()
-            logger.info("Firestore initialized successfully.")
         except Exception as e:
             logger.error(f"Firebase Admin critical failure: {str(e)}")
 
