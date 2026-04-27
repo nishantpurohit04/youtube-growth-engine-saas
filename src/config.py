@@ -15,7 +15,11 @@ def get_secret(key, default=""):
     # 1. Try Streamlit Secrets
     try:
         if key in st.secrets:
-            return st.secrets[key]
+            val = st.secrets[key]
+            # Clean the result (remove quotes/whitespace)
+            if isinstance(val, str):
+                return val.strip().strip('"').strip("'")
+            return val
     except Exception:
         pass
 
