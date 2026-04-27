@@ -3,6 +3,7 @@ from firebase_admin import credentials, firestore
 import os
 import logging
 import json
+import re
 from src.config import get_secret
 
 logger = logging.getLogger("CreditManager")
@@ -14,36 +15,67 @@ class CreditManager:
         self._initialize_firebase()
         self.db = CreditManager._db
 
+    def _clean_pem_key(self, key):
+        """Aggressively cleans a PEM private key to ensure it's valid for the cryptography library."""
+        if not key or not isinstance(key, str):
+            return key
+        
+        # 1. Remove any surrounding quotes that might have been captured from a JSON string
+        key = key.strip().strip('"').strip("'")
+        
+        # 2. Replace escaped newlines with actual newlines
+        key = key.replace('\\n', '\n')
+        
+        # 3. Ensure the key starts and ends with the correct PEM boundaries
+        # If it's missing the headers but contains 'BEGIN PRIVATE KEY', we wrap it.
+        if "BEGIN PRIVATE KEY" in key and not key.startswith("-----BEGIN PRIVATE KEY-----"):
+            # Find the start of the key and trim everything before it
+            start_idx = key.find("BEGIN PRIVATE KEY")
+            key = "-----" + key[start_idx:]
+        
+        if "END PRIVATE KEY" in key and not key.endswith("-----END PRIVATE KEY-----"):
+            # Find the end of the key and trim everything after it
+            end_idx = key.find("END PRIVATE KEY") + 18
+            key = key[:end_idx] + "-----"
+            
+        return key
+
     def _initialize_firebase(self):
-        """Robustly initializes Firebase Admin SDK using Cloud-Aware secrets."""
+        """Robustly initializes Firebase Admin SDK using Cloud-Aware secrets with PEM repair."""
         try:
             if not firebase_admin._apps:
                 secret = get_secret("FIREBASE_SERVICE_ACCOUNT_KEY")
                 if not secret:
-                    logger.error("CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY is missing from secrets/env.")
+                    logger.error("CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY is missing.")
                     return
 
-                # Handle JSON string vs File Path
-                if secret.strip().startswith('{'):
+                # Handle Case A: Secret is already a dictionary (Streamlit TOML)
+                if isinstance(secret, dict):
+                    cred_dict = secret
+                # Handle Case B: Secret is a JSON string
+                elif isinstance(secret, str) and secret.strip().startswith('{'):
                     try:
                         cred_dict = json.loads(secret)
-                        # CRITICAL: Fix private key newlines for JSON strings in Streamlit/Env
-                        if 'private_key' in cred_dict:
-                            # Handle both escaped and literal newlines
-                            pk = cred_dict['private_key']
-                            if '\\n' in pk:
-                                pk = pk.replace('\\n', '\n')
-                            cred_dict['private_key'] = pk
-                        
-                        cred = credentials.Certificate(cred_dict)
                     except json.JSONDecodeError as e:
-                        logger.error(f"CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY is not valid JSON: {e}")
+                        logger.error(f"CRITICAL: Secret is not valid JSON: {e}")
                         return
+                # Handle Case C: Secret is a path to a file
                 else:
-                    # Treat as path to file
                     cred_path = secret if os.path.exists(secret) else os.path.join(os.getcwd(), secret)
-                    cred = credentials.Certificate(cred_path)
+                    try:
+                        cred = credentials.Certificate(cred_path)
+                        firebase_admin.initialize_app(cred)
+                        CreditManager._db = firestore.client()
+                        return
+                    except Exception as e:
+                        logger.error(f"File-based cred load failed: {e}")
+                        return
 
+                # Now process the dictionary (Case A & B)
+                if 'private_key' in cred_dict:
+                    cred_dict['private_key'] = self._clean_pem_key(cred_dict['private_key'])
+                
+                cred = credentials.Certificate(cred_dict)
                 firebase_admin.initialize_app(cred)
             
             CreditManager._db = firestore.client()
@@ -54,7 +86,6 @@ class CreditManager:
     def get_user_credits(self, user_id):
         """Returns current credit balance; initializes new users with 5 credits."""
         if not self.db:
-            # Attempt one last-ditch re-initialization if db is missing
             self._initialize_firebase()
             self.db = CreditManager._db
             if not self.db:
@@ -66,7 +97,6 @@ class CreditManager:
             if doc.exists:
                 return doc.to_dict().get("credit_balance", 0)
             
-            # Auto-initialize new user
             user_ref.set({"credit_balance": 5})
             return 5
         except Exception as e:
