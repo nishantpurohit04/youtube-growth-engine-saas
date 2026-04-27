@@ -2,51 +2,63 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import os
 import logging
+import json
+from src.config import get_secret
 
 logger = logging.getLogger("CreditManager")
 
 class CreditManager:
+    _db = None  # Singleton pattern for Firestore client
+
     def __init__(self):
-        self.db = None
         self._initialize_firebase()
+        self.db = CreditManager._db
 
     def _initialize_firebase(self):
+        """Robustly initializes Firebase Admin SDK using Cloud-Aware secrets."""
         try:
-            # Check if firebase_admin is already initialized to avoid ValueError
             if not firebase_admin._apps:
-                from src.config import get_secret
                 secret = get_secret("FIREBASE_SERVICE_ACCOUNT_KEY")
                 if not secret:
-                    logger.warning("FIREBASE_SERVICE_ACCOUNT_KEY not found. Firestore will be unavailable.")
+                    logger.error("CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY is missing from secrets/env.")
                     return
-                
-                import json
-                # If the secret looks like a JSON string, load it as a dict
+
+                # Handle JSON string vs File Path
                 if secret.strip().startswith('{'):
                     try:
                         cred_dict = json.loads(secret)
-                        # Sanitize private key to ensure newlines are handled correctly
+                        # CRITICAL: Fix private key newlines for JSON strings in Streamlit/Env
                         if 'private_key' in cred_dict:
-                            cred_dict['private_key'] = cred_dict['private_key'].replace('\\n', '\n')
+                            # Handle both escaped and literal newlines
+                            pk = cred_dict['private_key']
+                            if '\\n' in pk:
+                                pk = pk.replace('\\n', '\n')
+                            cred_dict['private_key'] = pk
+                        
                         cred = credentials.Certificate(cred_dict)
-                    except json.JSONDecodeError:
-                        logger.error("FIREBASE_SERVICE_ACCOUNT_KEY is not valid JSON.")
+                    except json.JSONDecodeError as e:
+                        logger.error(f"CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY is not valid JSON: {e}")
                         return
                 else:
-                    # Otherwise, treat it as a path to a .json file
-                    cred = credentials.Certificate(secret)
-                
+                    # Treat as path to file
+                    cred_path = secret if os.path.exists(secret) else os.path.join(os.getcwd(), secret)
+                    cred = credentials.Certificate(cred_path)
+
                 firebase_admin.initialize_app(cred)
             
-            self.db = firestore.client()
+            CreditManager._db = firestore.client()
             logger.info("Firestore initialized successfully.")
         except Exception as e:
             logger.error(f"Firebase Admin initialization failed: {str(e)}")
 
     def get_user_credits(self, user_id):
-        """Returns the current credit balance for a user; initializes new users with 5 credits."""
+        """Returns current credit balance; initializes new users with 5 credits."""
         if not self.db:
-            return None
+            # Attempt one last-ditch re-initialization if db is missing
+            self._initialize_firebase()
+            self.db = CreditManager._db
+            if not self.db:
+                return None
         
         try:
             user_ref = self.db.collection("users").document(user_id)
@@ -54,42 +66,34 @@ class CreditManager:
             if doc.exists:
                 return doc.to_dict().get("credit_balance", 0)
             
-            # Auto-initialize new user with onboarding bonus
+            # Auto-initialize new user
             user_ref.set({"credit_balance": 5})
             return 5
         except Exception as e:
             logger.error(f"Error retrieving credits for {user_id}: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"Error fetching credits for {user_id}: {str(e)}")
             return None
 
     def initialize_user_credits(self, user_id, initial_amount=5):
         """Sets up a new user document with initial free credits."""
         if not self.db:
             return None
-        
         try:
             user_ref = self.db.collection("users").document(user_id)
             user_ref.set({
                 "credit_balance": initial_amount,
                 "created_at": firestore.firestore.SERVER_TIMESTAMP
             }, merge=True)
-            logger.info(f"Initialized {initial_amount} free credits for user {user_id}.")
             return initial_amount
         except Exception as e:
-            logger.error(f"Error initializing credits for {user_id}: {str(e)}")
+            logger.error(f"Error initializing credits for {user_id}: {e}")
             return None
 
     def deduct_credit(self, user_id):
-        """Decrements the user's credit balance by 1."""
+        """Decrements the user's credit balance by 1 using a transaction."""
         if not self.db:
-            return False
-        
+            return False, 0
         try:
             user_ref = self.db.collection("users").document(user_id)
-            
-            # Use a transaction to ensure atomic updates (prevent race conditions)
             @firestore.transactional
             def update_in_transaction(transaction, ref):
                 snapshot = ref.get(transaction=transaction)
@@ -101,30 +105,19 @@ class CreditManager:
                 return False, balance
 
             transaction = self.db.transaction()
-            success, current_balance = update_in_transaction(transaction, user_ref)
-            
-            if success:
-                logger.info(f"Deducted 1 credit from user {user_id}. New balance: {current_balance}")
-            else:
-                logger.warning(f"Insufficient credits for user {user_id}. Balance: {current_balance}")
-            
-            return success, current_balance
+            return update_in_transaction(transaction, user_ref)
         except Exception as e:
-            logger.error(f"Error deducting credit for {user_id}: {str(e)}")
-            return False
+            logger.error(f"Error deducting credit for {user_id}: {e}")
+            return False, 0
 
     def add_credits(self, user_id, amount):
-        """Adds a specified number of credits to the user's balance."""
+        """Adds credits to the user's balance."""
         if not self.db:
             return False
-        
         try:
             user_ref = self.db.collection("users").document(user_id)
-            user_ref.update({
-                "credit_balance": firestore.firestore.Increment(amount)
-            })
-            logger.info(f"Added {amount} credits to user {user_id}.")
+            user_ref.update({"credit_balance": firestore.firestore.Increment(amount)})
             return True
         except Exception as e:
-            logger.error(f"Error adding credits for {user_id}: {str(e)}")
+            logger.error(f"Error adding credits for {user_id}: {e}")
             return False
