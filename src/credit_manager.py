@@ -24,6 +24,9 @@ class CreditManager:
                 if secret.strip().startswith('{'):
                     try:
                         cred_dict = json.loads(secret)
+                        # Sanitize private key to ensure newlines are handled correctly
+                        if 'private_key' in cred_dict:
+                            cred_dict['private_key'] = cred_dict['private_key'].replace('\\n', '\n')
                         cred = credentials.Certificate(cred_dict)
                     except json.JSONDecodeError:
                         logger.error("FIREBASE_SERVICE_ACCOUNT_KEY is not valid JSON.")
