@@ -3,7 +3,6 @@ from firebase_admin import credentials, firestore
 import os
 import logging
 import json
-import re
 import base64
 from src.config import get_secret
 
@@ -16,51 +15,58 @@ class CreditManager:
         self._initialize_firebase()
         self.db = CreditManager._db
 
-    def _extract_pem(self, text):
-        """Extracts a PEM block from a string, ignoring surrounding quotes or JSON noise."""
-        pattern = r"-----BEGIN PRIVATE KEY-----.*?-----END PRIVATE KEY-----"
-        match = re.search(pattern, text, re.DOTALL)
-        if match:
-            return match.group(0)
-        return None
-
     def _initialize_firebase(self):
-        """Robustly initializes Firebase Admin SDK using Cloud-Aware secrets."""
+        """The Base64-Shielded Firebase Initializer."""
         try:
             if not firebase_admin._apps:
                 secret = get_secret("FIREBASE_SERVICE_ACCOUNT_KEY")
                 if not secret:
-                    logger.error("CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY is missing.")
+                    logger.error("CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY missing.")
                     return
 
+                # 1. DETECT BASE64: If it's a long string without spaces or braces, try Base64
+                if isinstance(secret, str) and len(secret) > 100 and '{' not in secret:
+                    try:
+                        decoded_json = base64.b64decode(secret).decode('utf-8')
+                        secret = decoded_json
+                        logger.info("Successfully decoded Base64 secret.")
+                    except Exception as e:
+                        logger.warning(f"Base64 decode failed, falling back to raw: {e}")
+
+                # 2. LOAD JSON
                 if isinstance(secret, dict):
                     cred_dict = secret
                 elif isinstance(secret, str) and secret.strip().startswith('{'):
                     try:
                         cred_dict = json.loads(secret)
                     except json.JSONDecodeError as e:
-                        logger.error(f"CRITICAL: Secret is not valid JSON: {e}")
+                        logger.error(f"CRITICAL: Invalid JSON: {e}")
                         return
                 else:
-                    cred_path = secret if os.path.exists(secret) else os.path.join(os.getcwd(), secret)
+                    # Assume it's a file path
                     try:
-                        cred = credentials.Certificate(cred_path)
+                        cred = credentials.Certificate(secret)
                         firebase_admin.initialize_app(cred)
                         CreditManager._db = firestore.client()
                         return
                     except Exception as e:
-                        logger.error(f"File-based cred load failed: {e}")
+                        logger.error(f"File load failed: {e}")
                         return
 
+                # 3. SANITIZE PRIVATE KEY
                 if 'private_key' in cred_dict:
-                    cred_dict['private_key'] = cred_dict['private_key'].replace('\\n', '\n')
+                    pk = cred_dict['private_key']
+                    # Fix literal \n and strip quotes
+                    pk = pk.replace('\\n', '\n').strip('"').strip("'")
+                    cred_dict['private_key'] = pk
                 
                 cred = credentials.Certificate(cred_dict)
                 firebase_admin.initialize_app(cred)
             
             CreditManager._db = firestore.client()
+            logger.info("Firestore initialized successfully.")
         except Exception as e:
-            logger.error(f"Firebase Admin initialization failed: {str(e)}")
+            logger.error(f"Firebase Admin critical failure: {str(e)}")
 
     def get_user_credits(self, user_id):
         if not self.db:
@@ -76,8 +82,8 @@ class CreditManager:
             user_ref.set({"credit_balance": 5})
             return 5
         except Exception as e:
-            logger.error(f"Error retrieving credits for {user_id}: {e}")
-            return f"ERROR: {str(e)}"
+            logger.error(f"Error retrieving credits: {e}")
+            return None
 
     def initialize_user_credits(self, user_id, initial_amount=5):
         if not self.db: return None
@@ -86,7 +92,7 @@ class CreditManager:
             user_ref.set({"credit_balance": initial_amount, "created_at": firestore.firestore.SERVER_TIMESTAMP}, merge=True)
             return initial_amount
         except Exception as e:
-            logger.error(f"Error initializing credits for {user_id}: {e}")
+            logger.error(f"Error initializing credits: {e}")
             return None
 
     def deduct_credit(self, user_id):
@@ -105,7 +111,7 @@ class CreditManager:
             transaction = self.db.transaction()
             return update_in_transaction(transaction, user_ref)
         except Exception as e:
-            logger.error(f"Error deducting credit for {user_id}: {e}")
+            logger.error(f"Error deducting credit: {e}")
             return False, 0
 
     def add_credits(self, user_id, amount):
@@ -115,5 +121,5 @@ class CreditManager:
             user_ref.update({"credit_balance": firestore.firestore.Increment(amount)})
             return True
         except Exception as e:
-            logger.error(f"Error adding credits for {user_id}: {e}")
+            logger.error(f"Error adding credits: {e}")
             return False
