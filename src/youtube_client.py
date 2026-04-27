@@ -15,7 +15,8 @@ logger = logging.getLogger("YouTubeClient")
 
 class YouTubeClient:
     def __init__(self):
-        self.api_key = os.getenv("YOUTUBE_API_KEY")
+        from src.config import get_secret
+        self.api_key = get_secret("YOUTUBE_API_KEY")
         if not self.api_key:
             raise ValueError("YOUTUBE_API_KEY not found in environment variables.")
         

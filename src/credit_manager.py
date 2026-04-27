@@ -14,7 +14,8 @@ class CreditManager:
         try:
             # Check if firebase_admin is already initialized to avoid ValueError
             if not firebase_admin._apps:
-                secret = os.getenv("FIREBASE_SERVICE_ACCOUNT_KEY")
+                from src.config import get_secret
+                secret = get_secret("FIREBASE_SERVICE_ACCOUNT_KEY")
                 if not secret:
                     logger.warning("FIREBASE_SERVICE_ACCOUNT_KEY not found. Firestore will be unavailable.")
                     return
